@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,11 +17,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef USE_UI
 #include "../platform.h"
 #include "ui_keyboard.h"
 #include "../../ui/ui_button.h"
-
-#ifdef USE_UI
 
 namespace xUi
 {

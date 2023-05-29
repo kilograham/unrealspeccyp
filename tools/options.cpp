@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -56,7 +57,7 @@ const char*	eOptionInt::Value() const
 	const char** vals = Values();
 	if(!vals)
 		return NULL;
-	return vals[value];
+	return vals[*this];
 }
 void eOptionInt::Value(const char* v)
 {
@@ -79,7 +80,7 @@ const char*	eOptionBool::Value() const
 	const char** vals = Values();
 	if(!vals)
 		return NULL;
-	return vals[value ? 1 : 0];
+	return vals[*this ? 1 : 0];
 }
 void eOptionBool::Value(const char* v)
 {
@@ -96,6 +97,12 @@ const char** eOptionBool::Values() const
 	static const char* values[] = { "off", "on", NULL };
 	return values;
 }
+const char** eOptionBoolYesNo::Values() const
+{
+	static const char* values[] = { "no", "yes", NULL };
+	return values;
+}
+
 void eOptionString::Value(const char* v)
 {
 	int s = strlen(v) + 1;

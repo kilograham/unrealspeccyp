@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2015 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -73,7 +74,13 @@ enum eKeyFlags
 enum eMouseAction { MA_MOVE, MA_BUTTON, MA_WHEEL };
 enum eAction
 {
-	A_RESET, A_TAPE_TOGGLE, A_TAPE_QUERY, A_DISK_QUERY
+	A_RESET,
+#ifndef NO_USE_TAPE
+	A_TAPE_TOGGLE, A_TAPE_QUERY, A_TAPE_REWIND
+#endif
+#ifndef NO_USE_FDD
+	A_DISK_QUERY
+#endif
 };
 enum eActionResult
 {
@@ -86,26 +93,46 @@ enum eActionResult
 struct eHandler
 {
 	eHandler();
+#ifndef NO_USE_DESTRUCTORS
 	~eHandler();
+#endif
 	virtual void OnInit() = 0;
 	virtual void OnDone() = 0;
 	virtual const char* OnLoop() = 0; // error desc if not NULL
+#ifndef USE_MU_SIMPLIFICATIONS
 	virtual const char* WindowCaption() const = 0;
+#endif
 	virtual void OnKey(char key, dword flags) = 0;
+#ifndef NO_USE_KEMPSTON
+#ifndef USE_MU
 	virtual void OnMouse(eMouseAction action, byte a, byte b) = 0;
-
+#endif
+#endif
 	virtual bool OnOpenFile(const char* name, const void* data = NULL, size_t data_size = 0) = 0;
+#ifdef USE_STREAM
+	virtual bool OnOpenFileCompressed(const char* name, const void* comressed_data, size_t compressed_data_size, size_t data_size) = 0;
+#endif
+#ifndef NO_USE_SAVE
 	virtual bool OnSaveFile(const char* name) = 0;
+#endif
 	virtual bool FileTypeSupported(const char* name) const = 0;
 	virtual eActionResult OnAction(eAction action) = 0;
 
+#ifndef NO_USE_REPLAY
 	virtual bool GetReplayProgress(dword* frame_current, dword* frames_total, dword* frames_cached) = 0;
+#endif
 
 	// data to draw
+#ifndef NO_USE_SCREEN
 	virtual void* VideoData() const = 0;
+#endif
+#ifndef NO_USE_UI
 	virtual void* VideoDataUI() const = 0;
+#endif
 	// pause/resume function for sync video by audio
 	virtual void VideoPaused(bool paused) = 0;
+	virtual bool IsVideoPaused() = 0;
+#ifndef USE_MU_SIMPLIFICATIONS
 	virtual int VideoFrame() const = 0;
 	// audio
 	virtual int	AudioSources() const = 0;
@@ -113,7 +140,7 @@ struct eHandler
 	virtual dword AudioDataReady(int source) const = 0;
 	virtual void AudioDataUse(int source, dword size) = 0;
 	virtual void AudioSetSampleRate(dword sample_rate) = 0;
-
+#endif
 	virtual bool FullSpeed() const = 0;
 
 	virtual eSpeccy* Speccy() const = 0;

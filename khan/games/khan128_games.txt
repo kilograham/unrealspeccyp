@@ -1,0 +1,15 @@
+chron128 = CHRON128.sna
+aykaramba = ay2.z80
+#doomdemo = DOOM_PD.Z80
+#tcats = thundercats.tap
+#manic = Manic_Miner_1983_Software_Projects.z80
+#pac-3d = 3D_Pacman_1983_Freddy_Kristiansen.z80
+#k-lore = knightlore.sna
+#jsw = JETSET.TAP
+#starwars = Star_Wars_1987_Domark.z80
+hobbit = Hobbit_The_v1.2_1982_Melbourne_House_a.z80
+#aticatac = aticatac.tap
+#dandare = dandare1.tap
+bitbang = bitbang.tap
+
+

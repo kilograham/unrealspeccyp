@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2013 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -27,7 +28,8 @@ void Ope40() { // in b,(c)
 	t += 4;
 	memptr = bc+1;
 	b = IoRead(bc);
-	f = log_f[b] | (f & CF);
+//    f = log_f[b] | (f & CF);
+    set_logic_flags_preserve(b, CF);
 }
 void Ope41() { // out (c),b
 	t += 4;
@@ -35,34 +37,23 @@ void Ope41() { // out (c),b
 	IoWrite(bc, b);
 }
 void Ope42() { // sbc hl,bc
-	memptr = hl+1;
-	byte fl = NF;
-	fl |= (((hl & 0x0FFF) - (bc & 0x0FFF) - (af & CF)) >> 8) & 0x10; /* HF */
-	unsigned tmp = (hl & 0xFFFF) - (bc & 0xFFFF) - (af & CF);
-	if (tmp & 0x10000) fl |= CF;
-	if (!(tmp & 0xFFFF)) fl |= ZF;
-	int ri = (int)(short)hl - (int)(short)bc - (int)(af & CF);
-	if (ri < -0x8000 || ri >= 0x8000) fl |= PV;
-	hl = tmp;
-	f = fl | (h & (F3|F5|SF));
-	t += 7;
+    sbc16(bc);
 }
 void Ope43() { // ld (nnnn),bc
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
+	temp16 adr = Read2Inc(pc);
 	memptr = adr+1;
-	Write(adr, c);
-	Write(adr+1, b);
+	Write2(adr, bc);
 	t += 12;
 }
+#ifndef USE_Z80T
 void Ope44() { // neg
-	f = sbcf[a];
+    f = sbcf[a];
 	a = -a;
 }
+#endif
 void Ope45() { // retn
 	iff1 = iff2;
-	unsigned addr = Read(sp++);
-	addr += 0x100*Read(sp++);
+	temp16 addr = Read2Inc(sp);
 	pc = addr;
 	memptr = addr;
 	t += 6;
@@ -78,7 +69,8 @@ void Ope48() { // in c,(c)
 	t += 4;
 	memptr = bc+1;
 	c = IoRead(bc);
-	f = log_f[c] | (f & CF);
+//	f = log_f[c] | (f & CF);
+    set_logic_flags_preserve(c, CF);
 }
 void Ope49() { // out (c),c
 	t += 4;
@@ -86,30 +78,18 @@ void Ope49() { // out (c),c
 	IoWrite(bc, c);
 }
 void Ope4A() { // adc hl,bc
-	memptr = hl+1;
-	byte fl = (((hl & 0x0FFF) + (bc & 0x0FFF) + (af & CF)) >> 8) & 0x10; /* HF */
-	unsigned tmp = (hl & 0xFFFF) + (bc & 0xFFFF) + (af & CF);
-	if (tmp & 0x10000) fl |= CF;
-	if (!(tmp & 0xFFFF)) fl |= ZF;
-	int ri = (int)(short)hl + (int)(short)bc + (int)(af & CF);
-	if (ri < -0x8000 || ri >= 0x8000) fl |= PV;
-	hl = tmp;
-	f = fl | (h & (F3|F5|SF));
-	t += 7;
+    adc16(bc);
 }
 void Ope4B() { // ld bc,(nnnn)
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
+	temp16 adr = Read2Inc(pc);
 	memptr = adr+1;
-	c = Read(adr);
-	b = Read(adr+1);
+	bc = Read2(adr);
 	t += 12;
 }
 void Ope4C() { Ope44(); } // neg
 void Ope4D() { // reti
 	iff1 = iff2;
-	unsigned addr = Read(sp++);
-	addr += 0x100*Read(sp++);
+	temp16 addr = Read2Inc(sp);
 	pc = addr;
 	memptr = addr;
 	t += 6;
@@ -126,7 +106,8 @@ void Ope50() { // in d,(c)
 	t += 4;
 	memptr = bc+1;
 	d = IoRead(bc);
-	f = log_f[d] | (f & CF);
+//    f = log_f[d] | (f & CF);
+    set_logic_flags_preserve(d, CF);
 }
 void Ope51() { // out (c),d
 	t += 4;
@@ -134,40 +115,31 @@ void Ope51() { // out (c),d
 	IoWrite(bc, d);
 }
 void Ope52() { // sbc hl,de
-	memptr = hl+1;
-	byte fl = NF;
-	fl |= (((hl & 0x0FFF) - (de & 0x0FFF) - (af & CF)) >> 8) & 0x10; /* HF */
-	unsigned tmp = (hl & 0xFFFF) - (de & 0xFFFF) - (af & CF);
-	if (tmp & 0x10000) fl |= CF;
-	if (!(tmp & 0xFFFF)) fl |= ZF;
-	int ri = (int)(short)hl - (int)(short)de - (int)(af & CF);
-	if (ri < -0x8000 || ri >= 0x8000) fl |= PV;
-	hl = tmp;
-	f = fl | (h & (F3|F5|SF));
-	t += 7;
+    sbc16(de);
 }
 void Ope53() { // ld (nnnn),de
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
+	temp16 adr = Read2Inc(pc);
 	memptr = adr+1;
-	Write(adr, e);
-	Write(adr+1, d);
+	Write2(adr, de);
 	t += 12;
 }
 void Ope54() { Ope44(); } // neg
 void Ope55() { Ope45(); } // retn
 void Ope56() { Ope4E(); } // im 1
+#ifndef USE_Z80T
 void Ope57() { // ld a,i
-	a = i;
-	f = (log_f[a] | (f & CF)) & ~PV;
+    a = i;
+    f = (log_f[a] | (f & CF)) & ~PV;
+    t++;
 	if (iff1 && (t+10 < frame_tacts)) f |= PV;
-	t++;
 }
+#endif
 void Ope58() { // in e,(c)
 	t += 4;
 	memptr = bc+1;
 	e = IoRead(bc);
-	f = log_f[e] | (f & CF);
+//    f = log_f[e] | (f & CF);
+    set_logic_flags_preserve(e, CF);
 }
 void Ope59() { // out (c),e
 	t += 4;
@@ -175,23 +147,11 @@ void Ope59() { // out (c),e
 	IoWrite(bc, e);
 }
 void Ope5A() { // adc hl,de
-	memptr = hl+1;
-	byte fl = (((hl & 0x0FFF) + (de & 0x0FFF) + (af & CF)) >> 8) & 0x10; /* HF */
-	unsigned tmp = (hl & 0xFFFF) + (de & 0xFFFF) + (af & CF);
-	if (tmp & 0x10000) fl |= CF;
-	if (!(tmp & 0xFFFF)) fl |= ZF;
-	int ri = (int)(short)hl + (int)(short)de + (int)(af & CF);
-	if (ri < -0x8000 || ri >= 0x8000) fl |= PV;
-	hl = tmp;
-	f = fl | (h & (F3|F5|SF));
-	t += 7;
+    adc16(de);
 }
 void Ope5B() { // ld de,(nnnn)
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
-	memptr = adr+1;
-	e = Read(adr);
-	d = Read(adr+1);
+    temp16 adr = Read2Inc(pc);
+	de = Read2(adr);
 	t += 12;
 }
 void Ope5C() { Ope44(); } // neg
@@ -199,17 +159,25 @@ void Ope5D() { Ope4D(); } // reti
 void Ope5E() { // im 2
 	im = 2;
 }
+#ifndef USE_Z80T
 void Ope5F() { // ld a,r
-	a = (r_low & 0x7F) | r_hi;
+#ifdef NO_UPDATE_RLOW_IN_FETCH
+    // save on counting r_low
+    a = ((t>>2) & 0x7F) | r_hi;
+#else
+    a = (r_low & 0x7F) | r_hi;
+#endif
 	f = (log_f[a] | (f & CF)) & ~PV;
 	if (iff2 && ((t+10 < frame_tacts) || eipos+8==t)) f |= PV;
 	t++;
 }
+#endif
 void Ope60() { // in h,(c)
 	t += 4;
 	memptr = bc+1;
 	h = IoRead(bc);
-	f = log_f[h] | (f & CF);
+//	f = log_f[h] | (f & CF);
+    set_logic_flags_preserve(h, CF);
 }
 void Ope61() { // out (c),h
 	t += 4;
@@ -217,34 +185,28 @@ void Ope61() { // out (c),h
 	IoWrite(bc, h);
 }
 void Ope62() { // sbc hl,hl
-	memptr = hl+1;
-	byte fl = NF;
-	fl |= (f & CF) << 4; /* HF - copy from CF */
-	unsigned tmp = 0-(af & CF);
-	if (tmp & 0x10000) fl |= CF;
-	if (!(tmp & 0xFFFF)) fl |= ZF;
-	// never set PV
-	hl = tmp;
-	f = fl | (h & (F3|F5|SF));
-	t += 7;
+    sbc16(hl);
 }
 void Ope63() { Op22(); } // ld (nnnn),hl
 void Ope64() { Ope44(); } // neg
 void Ope65() { Ope45(); } // retn
 void Ope66() { Ope46(); } // im 0
+#ifndef USE_Z80T
 void Ope67() { // rrd
-	byte tmp = Read(hl);
+    byte tmp = Read(hl);
 	memptr = hl+1;
 	Write(hl, (a << 4) | (tmp >> 4));
 	a = (a & 0xF0) | (tmp & 0x0F);
 	f = log_f[a] | (f & CF);
 	t += 10;
 }
+#endif
 void Ope68() { // in l,(c)
 	t += 4;
 	memptr = bc+1;
 	l = IoRead(bc);
-	f = log_f[l] | (f & CF);
+//    f = log_f[l] | (f & CF);
+    set_logic_flags_preserve(l, CF);
 }
 void Ope69() { // out (c),l
 	t += 4;
@@ -252,33 +214,27 @@ void Ope69() { // out (c),l
 	IoWrite(bc, l);
 }
 void Ope6A() { // adc hl,hl
-	memptr = hl+1;
-	byte fl = ((h << 1) & 0x10); /* HF */
-	unsigned tmp = (hl & 0xFFFF)*2 + (af & CF);
-	if (tmp & 0x10000) fl |= CF;
-	if (!(tmp & 0xFFFF)) fl |= ZF;
-	int ri = 2*(int)(short)hl + (int)(af & CF);
-	if (ri < -0x8000 || ri >= 0x8000) fl |= PV;
-	hl = tmp;
-	f = fl | (h & (F3|F5|SF));
-	t += 7;
+    adc16(hl);
 }
 void Ope6B() { Op2A(); } // ld hl,(nnnn)
 void Ope6C() { Ope44(); } // neg
 void Ope6D() { Ope4D(); } // reti
 void Ope6E() { Ope56(); } // im 0/1 -> im 1
+#ifndef USE_Z80T
 void Ope6F() { // rld
-	byte tmp = Read(hl);
+    byte tmp = Read(hl);
 	memptr = hl+1;
 	Write(hl, (a & 0x0F) | (tmp << 4));
 	a = (a & 0xF0) | (tmp >> 4);
 	f = log_f[a] | (f & CF);
 	t += 10;
 }
+#endif
 void Ope70() { // in (c)
-	t += 4;
+    t += 4;
 	memptr = bc+1;
-	f = log_f[IoRead(bc)] | (f & CF);
+//    f = log_f[IoRead(bc)] | (f & CF);
+    set_logic_flags_preserve(IoRead(bc), CF);
 }
 void Ope71() { // out (c),0
 	t += 4;
@@ -286,24 +242,12 @@ void Ope71() { // out (c),0
 	IoWrite(bc, 0);
 }
 void Ope72() { // sbc hl,sp
-	memptr = hl+1;
-	byte fl = NF;
-	fl |= (((hl & 0x0FFF) - (sp & 0x0FFF) - (af & CF)) >> 8) & 0x10; /* HF */
-	unsigned tmp = (hl & 0xFFFF) - (sp & 0xFFFF) - (af & CF);
-	if (tmp & 0x10000) fl |= CF;
-	if (!(tmp & 0xFFFF)) fl |= ZF;
-	int ri = (int)(short)hl - (int)(short)sp - (int)(af & CF);
-	if (ri < -0x8000 || ri >= 0x8000) fl |= PV;
-	hl = tmp;
-	f = fl | (h & (F3|F5|SF));
-	t += 7;
+    sbc16(sp);
 }
 void Ope73() { // ld (nnnn),sp
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
+	temp16 adr = Read2Inc(pc);
 	memptr = adr+1;
-	Write(adr, sp_l);
-	Write(adr+1, sp_h);
+	Write2(adr, sp);
 	t += 12;
 }
 void Ope74() { Ope44(); } // neg
@@ -316,7 +260,8 @@ void Ope78() { // in a,(c)
 	t += 4;
 	memptr = bc+1;
 	a = IoRead(bc);
-	f = log_f[a] | (f & CF);
+    // f = log_f[a] | (f & CF);
+    set_logic_flags_preserve(a, CF);
 }
 void Ope79() { // out (c),a
 	t += 4;
@@ -324,45 +269,39 @@ void Ope79() { // out (c),a
 	IoWrite(bc, a);
 }
 void Ope7A() { // adc hl,sp
-	memptr = hl+1;
-	byte fl = (((hl & 0x0FFF) + (sp & 0x0FFF) + (af & CF)) >> 8) & 0x10; /* HF */
-	unsigned tmp = (hl & 0xFFFF) + (sp & 0xFFFF) + (af & CF);
-	if (tmp & 0x10000) fl |= CF;
-	if (!(unsigned short)tmp) fl |= ZF;
-	int ri = (int)(short)hl + (int)(short)sp + (int)(af & CF);
-	if (ri < -0x8000 || ri >= 0x8000) fl |= PV;
-	hl = tmp;
-	f = fl | (h & (F3|F5|SF));
-	t += 7;
+    adc16(sp);
 }
 void Ope7B() { // ld sp,(nnnn)
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
+	temp16 adr = Read2Inc(pc);
 	memptr = adr+1;
-	sp_l = Read(adr);
-	sp_h = Read(adr+1);
+	sp = Read2(adr);
 	t += 12;
 }
 void Ope7C() { Ope44(); } // neg
 void Ope7D() { Ope4D(); } // reti
 void Ope7E() { Ope5E(); } // im 2
 void Ope7F() { Op00(); } // nop
+#ifndef USE_Z80T
 void OpeA0() { // ldi
-	t += 8;
-	byte tempbyte = Read(hl++);
+    t += 8;
+	temp8 tempbyte = ReadInc(hl);
 	Write(de++, tempbyte);
 	tempbyte += a; tempbyte = (tempbyte & F3) + ((tempbyte << 4) & F5);
 	f = (f & ~(NF|HF|PV|F3|F5)) + tempbyte;
 	if (--bc & 0xFFFF) f |= PV; //???
 }
+#endif
+#ifndef USE_Z80T
 void OpeA1() { // cpi
-	t += 8;
-	byte cf = f & CF;
-	byte tempbyte = Read(hl++);
-	f = cpf8b[a*0x100 + tempbyte] + cf;
-	if (--bc & 0xFFFF) f |= PV; //???
-	memptr++;
+    t += 8;
+    byte cf = f & CF;
+    byte tempbyte = ReadInc(hl);
+    f = cpf8b[a*0x100 + tempbyte] + cf;
+    if (--bc & 0xFFFF) f |= PV; //???
+    memptr++;
 }
+#endif
+#ifndef USE_Z80T
 void OpeA2A3AAABFlags(byte val, byte tmp)
 {
 	f = log_f[b] & ~PV;
@@ -370,131 +309,163 @@ void OpeA2A3AAABFlags(byte val, byte tmp)
 	if(tmp < val) f |= (HF|CF);
 	if(val & 0x80) f |= NF;
 }
+#endif
 void OpeA2() { // ini
 	memptr = bc+1;
 	t += 8;
-	byte val = IoRead(bc);
+	temp8 val = IoRead(bc);
 	--b;
-	Write(hl++, val);
+	Write(hl, val);
+	hl++;
 	OpeA2A3AAABFlags(val, val + c + 1);
 }
 void OpeA3() { // outi
-	t += 8;
-	byte val = Read(hl++);
+    t += 8;
+	temp8 val = ReadInc(hl);
 	--b;
 	IoWrite(bc, val);
 	OpeA2A3AAABFlags(val, val + l);
 	memptr = bc+1;
 }
+#ifndef USE_Z80T
 void OpeA8() { // ldd
-	t += 8;
-	byte tempbyte = Read(hl--);
+    t += 8;
+	temp8 tempbyte = Read(hl--);
 	Write(de--, tempbyte);
 	tempbyte += a; tempbyte = (tempbyte & F3) + ((tempbyte << 4) & F5);
 	f = (f & ~(NF|HF|PV|F3|F5)) + tempbyte;
 	if (--bc & 0xFFFF) f |= PV; //???
 }
+#endif
+#ifndef USE_Z80T
 void OpeA9() { // cpd
-	t += 8;
-	byte cf = f & CF;
-	byte tempbyte = Read(hl--);
-	f = cpf8b[a*0x100 + tempbyte] + cf;
-	if (--bc & 0xFFFF) f |= PV; //???
-	memptr--;
+    t += 8;
+    byte cf = f & CF;
+    byte tempbyte = Read(hl--);
+    f = cpf8b[a*0x100 + tempbyte] + cf;
+    if (--bc & 0xFFFF) f |= PV; //???
+    memptr--;
 }
+#endif
 void OpeAA() { // ind
-	memptr = bc-1;
+    memptr = bc-1;
 	t += 8;
-	byte val = IoRead(bc);
+	temp8 val = IoRead(bc);
 	--b;
-	Write(hl--, val);
+	Write(hl, val);
+	--hl;
 	OpeA2A3AAABFlags(val, val + c - 1);
 }
 void OpeAB() { // outd
-	t += 8;
-	byte val = Read(hl--);
+    t += 8;
+	temp8 val = Read(hl);
+	--hl;
 	--b;
 	IoWrite(bc, val);
 	OpeA2A3AAABFlags(val, val + l);
 	memptr = bc-1;
 }
 void OpeB0() { // ldir
-	t += 8;
-	byte tempbyte = Read(hl++);
-	Write(de++, tempbyte);
-	tempbyte += a; tempbyte = (tempbyte & F3) + ((tempbyte << 4) & F5);
-	f = (f & ~(NF|HF|PV|F3|F5)) + tempbyte;
-	if (--bc & 0xFFFF) f |= PV, pc -= 2, t += 5, memptr = pc+1; //???
+    OpeA0();
+    if_flag_set(PV, [&] {
+        pc -= 2, t += 5, memptr = pc+1; //???
+    });
 }
 void OpeB1() { // cpir
-	memptr++;
-	t += 8;
-	byte cf = f & CF;
-	byte tempbyte = Read(hl++);
-	f = cpf8b[a*0x100 + tempbyte] + cf;
-	if (--bc & 0xFFFF) { //???
-		f |= PV;
-		if (!(f & ZF)) pc -= 2, t += 5, memptr = pc+1;
-	}
+    OpeA1();
+    if_flag_set(PV, [&] {
+        return if_flag_clear(ZF,
+            [&] {
+            pc -= 2, t += 5, memptr = pc+1;
+        });
+    });
 }
 void OpeB2() { // inir
-	t += 8;
+    t += 8;
 	memptr = bc+1;
-	Write(hl++, IoRead(bc));
+	Write(hl, IoRead(bc));
+	hl++;
 	dec8(b);
-	if (b) f |= PV, pc -= 2, t += 5;
-	else f &= ~PV;
+
+	if_nonzero(b, [&] {
+        f |= PV, pc -= 2, t += 5;
+	}, [&] {
+	    f &= ~PV;
+	});
 }
 void OpeB3() { // otir
-	t += 8;
+    t += 8;
 	dec8(b);
-	IoWrite(bc, Read(hl++));
-	if (b) f |= PV, pc -= 2, t += 5;
-	else f &= ~PV;
-	f &= ~CF; if (!l) f |= CF;
-	memptr = bc+1;
+	IoWrite(bc, Read(hl));
+	hl++;
+    memptr = bc+1;
+    return if_nonzero(b, [&] {
+        f |= PV, pc -= 2, t += 5;
+        f &= ~CF;
+        return if_zero(l, [&] {
+           f |= CF;
+        });
+    }, [&] {
+        f &= ~PV;
+        return if_zero(l, [&] {
+            f |= CF;
+        });
+    });
 }
 void OpeB8() { // lddr
-	t += 8;
-	byte tempbyte = Read(hl--);
-	Write(de--, tempbyte);
-	tempbyte += a; tempbyte = (tempbyte & F3) + ((tempbyte << 4) & F5);
-	f = (f & ~(NF|HF|PV|F3|F5)) + tempbyte;
-	if (--bc & 0xFFFF) f |= PV, memptr = pc - 1, pc -= 2, t += 5; //???
+    OpeA8();
+    return if_flag_set(PV, [&] {
+        pc -= 2, t += 5, memptr = pc+1; //???
+    });
 }
 void OpeB9() { // cpdr
-	memptr--;
-	t += 8;
-	byte cf = f & CF;
-	byte tempbyte = Read(hl--);
-	f = cpf8b[a*0x100 + tempbyte] + cf;
-	if (--bc & 0xFFFF) { //???
-		f |= PV;
-		if (!(f & ZF)) pc -= 2, t += 5, memptr = pc+1;
-	}
-}
-void OpeBA() { // indr
-	t += 8;
-	memptr = bc-1;
-	Write(hl--, IoRead(bc));
-	dec8(b);
-	if (b) f |= PV, pc -= 2, t += 5;
-	else f &= ~PV;
-}
-void OpeBB() { // otdr
-	t += 8;
-	dec8(b);
-	IoWrite(bc, Read(hl--));
-	if (b) f |= PV, pc -= 2, t += 5;
-	else f &= ~PV;
-	f &= ~CF; if (l == 0xFF) f |= CF;
-	memptr = bc-1;
+    OpeA9();
+    return if_flag_set(PV, [&] {
+          return if_flag_clear(ZF,
+                               [&] {
+                                   pc -= 2, t += 5, memptr = pc+1;
+                               });
+      });
 }
 
+void OpeBA() { // indr
+    t += 8;
+	memptr = bc-1;
+	Write(hl, IoRead(bc));
+	--hl;
+	dec8(b);
+    if_nonzero(b, [&] {
+        f |= PV, pc -= 2, t += 5;
+    }, [&] {
+        f &= ~PV;
+    });
+}
+void OpeBB() { // otdr
+    t += 8;
+    dec8(b);
+    IoWrite(bc, Read(hl));
+    --hl;
+    memptr = bc-1;
+    return if_nonzero(b, [&] {
+        f |= PV, pc -= 2, t += 5;
+        f &= ~CF;
+        return if_equal(l, 255, [&] {
+            f |= CF;
+        });
+    }, [&] {
+        f &= ~PV;
+        return if_equal(l, 255, [&] {
+            f |= CF;
+        });
+    });
+}
+
+#ifndef USE_Z80T
 void OpED()
 {
 	byte opcode = Fetch();
 	(this->*ext_opcodes[opcode])();
 }
+#endif
 
 #endif//__Z80_OP_ED_H__

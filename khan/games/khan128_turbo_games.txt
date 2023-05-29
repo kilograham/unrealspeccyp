@@ -1,0 +1,3 @@
+down = down_abc.tap
+shock = shock.tap
+NO_WAIT_VBLANK z80full = z80full.tap

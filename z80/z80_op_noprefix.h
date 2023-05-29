@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2013 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,12 +24,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+void rst_idone(temp16 addr) {
+	push(pc);
+	pc = addr;
+	memptr = addr;
+	t += 7;
+}
 void Op00() { // nop
 	/* note: don't inc t: 4 cycles already wasted in m1_cycle() */
 }
 void Op01() { // ld bc,nnnn
-	c = Read(pc++);
-	b = Read(pc++);
+	bc = Read2Inc(pc);
 	t += 6;
 }
 void Op02() { // ld (bc),a
@@ -48,26 +54,23 @@ void Op05() { // dec b
 	dec8(b);
 }
 void Op06() { // ld b,nn
-	b = Read(pc++);
+	b = ReadInc(pc);
 	t += 3;
 }
+#ifndef USE_Z80T
 void Op07() { // rlca
 	f = rlcaf[a] | (f & (SF | ZF | PV));
 	a = rol[a];
 }
+#endif
 void Op08() { // ex af,af'
-	unsigned tmp = af;
+	temp16 tmp;
+	tmp = af;
 	af = alt.af;
 	alt.af = tmp;
 }
 void Op09() { // add hl,bc
-	memptr = hl+1;
-	f = (f & ~(NF | CF | F5 | F3 | HF));
-	f |= (((hl & 0x0FFF) + (bc & 0x0FFF)) >> 8) & 0x10; /* HF */
-	hl = (hl & 0xFFFF) + (bc & 0xFFFF);
-	if (hl & 0x10000) f |= CF;
-	f |= (h & (F5 | F3));
-	t += 7;
+	add16(hl, bc);
 }
 void Op0A() { // ld a,(bc)
 	memptr = bc+1;
@@ -75,7 +78,7 @@ void Op0A() { // ld a,(bc)
 	t += 3;
 }
 void Op0B() { // dec bc
-	bc--;
+	--bc;
 	t += 2;
 }
 void Op0C() { // inc c
@@ -85,22 +88,29 @@ void Op0D() { // dec c
 	dec8(c);
 }
 void Op0E() { // ld c,nn
-	c = Read(pc++);
+	c = ReadInc(pc);
 	t += 3;
 }
+#ifndef USE_Z80T
 void Op0F() { // rrca
 	f = rrcaf[a] | (f & (SF | ZF | PV));
 	a = ror[a];
 }
+#endif
 void Op10() { // djnz rr
-	if (--b) {
-		signed char offs = (char)Read(pc);
-		memptr = pc += offs+1, t += 9;
-	} else pc++, t += 4;
+	--b;
+	return if_nonzero(b,
+						 [&] {
+							 address_delta offs = (address_delta)Read(pc);
+							 memptr = pc += offs+1, t += 9;
+						 },
+						 [&] {
+							 pc++, t += 4;
+						 });
+
 }
 void Op11() { // ld de,nnnn
-	e = Read(pc++);
-	d = Read(pc++);
+	de = Read2Inc(pc);
 	t += 6;
 }
 void Op12() { // ld (de),a
@@ -120,28 +130,24 @@ void Op15() { // dec d
 	dec8(d);
 }
 void Op16() { // ld d,nn
-	d = Read(pc++);
+	d = ReadInc(pc);
 	t += 3;
 }
+#ifndef USE_Z80T
 void Op17() { // rla
 	byte new_a = (a << 1) + (f & 1);
 	f = rlcaf[a] | (f & (SF | ZF | PV)); // use same table with rlca
 	a = new_a;
 }
+#endif
 void Op18() { // jr rr
-	signed char offs = (char)Read(pc);
-	pc += offs+1;
+	address_delta offs = (address_delta)Read(pc);
+	pc += offs + 1;
 	memptr = pc;
 	t += 8;
 }
 void Op19() { // add hl,de
-	memptr = hl+1;
-	f = (f & ~(NF | CF | F5 | F3 | HF));
-	f |= (((hl & 0x0FFF) + (de & 0x0FFF)) >> 8) & 0x10; /* HF */
-	hl = (hl & 0xFFFF) + (de & 0xFFFF);
-	if (hl & 0x10000) f |= CF;
-	f |= (h & (F5 | F3));
-	t += 7;
+	add16(hl, de);
 }
 void Op1A() { // ld a,(de)
 	memptr = de+1;
@@ -149,7 +155,7 @@ void Op1A() { // ld a,(de)
 	t += 3;
 }
 void Op1B() { // dec de
-	de--;
+	--de;
 	t += 2;
 }
 void Op1C() { // inc e
@@ -159,33 +165,35 @@ void Op1D() { // dec e
 	dec8(e);
 }
 void Op1E() { // ld e,nn
-	e = Read(pc++);
+	e = ReadInc(pc);
 	t += 3;
 }
+#ifndef USE_Z80T
 void Op1F() { // rra
 	byte new_a = (a >> 1) + (f << 7);
 	f = rrcaf[a] | (f & (SF | ZF | PV)); // use same table with rrca
 	a = new_a;
 }
+#endif
 void Op20() { // jr nz, rr
-	if (!(f & ZF)) {
-		signed char offs = (char)Read(pc);
+	return if_flag_clear(ZF,
+	[&] {
+		address_delta offs = (address_delta)Read(pc);
 		memptr = pc += offs+1, t += 8;
-	} else pc++, t += 3;
+	},
+	[&] {
+		pc++, t += 3;
+	});
 }
 void Op21() { // ld hl,nnnn
-	l = Read(pc++);
-	h = Read(pc++);
+	hl = Read2Inc(pc);
 	t += 6;
 }
 void Op22() { // ld (nnnn),hl
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
+	temp16 adr = Read2Inc(pc);
 	memptr = adr+1;
-	t += 9;
-	Write(adr, l);
-	t += 3;
-	Write(adr+1, h);
+	Write2(adr, hl);
+	t += 12;
 }
 void Op23() { // inc hl
 	hl++;
@@ -198,38 +206,36 @@ void Op25() { // dec h
 	dec8(h);
 }
 void Op26() { // ld h,nn
-	h = Read(pc++);
+	h = ReadInc(pc);
 	t += 3;
 }
+#ifndef USE_Z80T
 void Op27()
 { // daa
 	af = daatab[a + 0x100*((f & 3) + ((f >> 2) & 4))];
 }
+#endif
 void Op28() { // jr z,rr
-	if ((f & ZF)) {
-		signed char offs = (char)Read(pc);
-		memptr = pc += offs+1, t += 8;
-	} else pc++, t += 3;
+	return if_flag_set(ZF,
+						 [&] {
+							 address_delta offs = (address_delta)Read(pc);
+							 memptr = pc += offs+1, t += 8;
+						 },
+						 [&] {
+							 pc++, t += 3;
+						 });
 }
 void Op29() { // add hl,hl
-	memptr = hl+1;
-	f = (f & ~(NF | CF | F5 | F3 | HF));
-	f |= ((hl >> 7) & 0x10); /* HF */
-	hl = (hl & 0xFFFF)*2;
-	if (hl & 0x10000) f |= CF;
-	f |= (h & (F5 | F3));
-	t += 7;
+	add16(hl, hl);
 }
 void Op2A() { // ld hl,(nnnn)
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
+	temp16 adr = Read2Inc(pc);
 	memptr = adr+1;
-	l = Read(adr);
-	h = Read(adr+1);
+	hl = Read2(adr);
 	t += 12;
 }
 void Op2B() { // dec hl
-	hl--;
+	--hl;
 	t += 2;
 }
 void Op2C() { // inc l
@@ -239,28 +245,31 @@ void Op2D() { // dec l
 	dec8(l);
 }
 void Op2E() { // ld l,nn
-	l = Read(pc++);
+	l = ReadInc(pc);
 	t += 3;
 }
 void Op2F() { // cpl
 	a ^= 0xFF;
-	f = (f & ~(F3|F5)) | NF | HF | (a & (F3|F5));
+	set_a35_flags_preserve_set(PV|ZF|SF|CF, NF|HF);
+//	f = (f & ~(F3|F5)) | NF | HF | (a & (F3|F5));
 }
 void Op30() { // jr nc, rr
-	if (!(f & CF)) {
-		signed char offs = (char)Read(pc);
-		memptr = pc += offs+1, t += 8;
-	} else pc++, t += 3;
+	return if_flag_clear(CF,
+						 [&] {
+							 address_delta offs = (address_delta)Read(pc);
+							 memptr = pc += offs+1, t += 8;
+						 },
+						 [&] {
+							 pc++, t += 3;
+						 });
 }
 void Op31() { // ld sp,nnnn
-	sp_l = Read(pc++);
-	sp_h = Read(pc++);
+	sp = Read2Inc(pc);
 	t += 6;
 }
 void Op32() { // ld (nnnn),a
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
-	memptr = ((adr+1) & 0xFF) + (a << 8);
+	temp16 adr = Read2Inc(pc);
+	mem_l = adr+1;
 	mem_h = a;
 	t += 9;
 	Write(adr, a);
@@ -270,48 +279,46 @@ void Op33() { // inc sp
 	t += 2;
 }
 void Op34() { // inc (hl)
-	byte v = Read(hl);
+	temp8 v = Read(hl);
 	inc8(v);
 	t += 7;
 	Write(hl, v);
 }
 void Op35() { // dec (hl)
-	byte v = Read(hl);
+	temp8 v = Read(hl);
 	dec8(v);
 	t += 7;
 	Write(hl, v);
 }
 void Op36() { // ld (hl),nn
 	t += 6;
-	Write(hl, Read(pc++));
+	Write(hl, ReadInc(pc));
 }
 void Op37() { // scf
-	f = (f & (PV|ZF|SF)) | (a & (F3|F5)) | CF;
+	// f = (f & (PV|ZF|SF)) | (a & (F3|F5)) | CF;
+	set_a35_flags_preserve_set(PV|ZF|SF, CF);
 }
 void Op38() { // jr c,rr
-	if ((f & CF)) {
-		signed char offs = (char)Read(pc);
-		memptr = pc += offs+1, t += 8;
-	} else pc++, t += 3;
+	return if_flag_set(CF,
+						 [&] {
+							 address_delta offs = (address_delta)Read(pc);
+							 memptr = pc += offs+1, t += 8;
+						 },
+						 [&] {
+							 pc++, t += 3;
+						 });
 }
 void Op39() { // add hl,sp
-	memptr = hl+1;
-	f = (f & ~(NF | CF | F5 | F3 | HF));
-	f |= (((hl & 0x0FFF) + (sp & 0x0FFF)) >> 8) & 0x10; /* HF */
-	hl = (hl & 0xFFFF) + (sp & 0xFFFF);
-	if (hl & 0x10000) f |= CF;
-	f |= (h & (F5 | F3));
-	t += 7;
+	add16(hl, sp);
 }
 void Op3A() { // ld a,(nnnn)
-	unsigned adr = Read(pc++);
-	adr += Read(pc++)*0x100;
+	temp16 adr = Read2Inc(pc);
 	memptr = adr+1;
 	a = Read(adr);
 	t += 9;
 }
 void Op3B() { // dec sp
-	sp--;
+	--sp;
 	t += 2;
 }
 void Op3C() { // inc a
@@ -321,12 +328,14 @@ void Op3D() { // dec a
 	dec8(a);
 }
 void Op3E() { // ld a,nn
-	a = Read(pc++);
+	a = ReadInc(pc);
 	t += 3;
 }
+#ifndef USE_Z80T
 void Op3F() { // ccf
 	f = (f & (PV|ZF|SF)) | ((f & CF) ? HF : CF) | (a & (F3|F5));
 }
+#endif
 void Op40() {} // ld b,b
 void Op49() {} // ld c,c
 void Op52() {} // ld d,d
@@ -490,10 +499,12 @@ void Op75() { // ld (hl),l
 	t += 3;
 	Write(hl, l);
 }
+#ifndef USE_Z80T
 void Op76() { // halt
 	halted = 1;
 	unsigned int st = (frame_tacts - t-1)/4+1;
 	t += 4*st;
+#ifndef NO_USE_REPLAY
 	if(handler.io) // replay is active
 	{
 		r_low += fetches;
@@ -501,7 +512,13 @@ void Op76() { // halt
 	}
 	else
 		r_low += st;
+#else
+#ifndef NO_UPDATE_RLOW_IN_FETCH
+	r_low += st;
+#endif
+#endif
 }
+#endif
 void Op77() { // ld (hl),a
 	t += 3;
 	Write(hl, a);
@@ -729,402 +746,390 @@ void OpBF() { // cp a
 	cp8(a); // can't optimize: F3,F5 depends on A
 }
 void OpC0() { // ret nz
-	if (!(f & ZF)) {
-		unsigned addr = Read(sp++);
-		addr += 0x100*Read(sp++);
-		pc = addr;
-		memptr = addr;
-		t += 7;
-	} else t += 1;
+	return if_flag_clear(ZF,
+					   [&] {
+						   pc = memptr = Read2Inc(sp);
+						   t += 7;
+					   },
+					   [&] {
+						   t += 1;
+					   });
 }
 void OpC1() { // pop bc
-	c = Read(sp++);
-	b = Read(sp++);
+	bc = Read2Inc(sp);
 	t += 6;
 }
 void OpC2() { // jp nz,nnnn
 	t += 6;
-	unsigned addr = Read(pc);
-	addr += 0x100*Read(pc+1);
-	memptr = addr;
-	if (!(f & ZF)) {
-		pc = addr;
-	} else pc += 2;
+	memptr = Read2(pc);
+	return if_flag_clear(ZF,
+						 [&] {
+							 pc = memptr;
+						 },
+						 [&] {
+							 pc += 2;
+						 });
 }
 void OpC3() { // jp nnnn
-	unsigned lo = Read(pc++);
-	pc = lo + 0x100*Read(pc);
+	pc = Read2(pc);
 	memptr = pc;
 	t += 6;
 }
 void OpC4() { // call nz,nnnn
-	pc += 2;
-	unsigned addr = Read(pc-2);
-	addr += 0x100*Read(pc-1);
-	memptr = addr;
-	if (!(f & ZF)) {
-		Write(--sp, pc_h);
-		Write(--sp, pc_l);
-		pc = addr;
-		t += 13;
-	} else t += 6;
+	memptr = Read2Inc(pc);
+	return if_flag_clear(ZF,
+						 [&]{
+							 push(pc);
+							 pc = memptr;
+							 t += 13;
+						 },
+						 [&]{
+							 t += 6;
+						 });
 }
 void OpC5() { // push bc
 	t += 7;
-	Write(--sp, b);
-	Write(--sp, c);
+	push(bc);
 }
 void OpC6() { // add a,nn
-	add8(Read(pc++));
+	add8(ReadInc(pc));
 	t += 3;
 }
 void OpC7() { // rst 00
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
+	push(pc);
 	pc = 0x00;
 	memptr = 0x00;
 	t += 7;
 }
 void OpC8() { // ret z
-	if (f & ZF) {
-		unsigned addr = Read(sp++);
-		addr += 0x100*Read(sp++);
-		pc = addr;
-		memptr = addr;
-		t += 7;
-	} else t += 1;
+	return if_flag_set(ZF,
+					   [&] {
+						   pc = memptr = Read2Inc(sp);
+						   t += 7;
+					   },
+					   [&] {
+						   t += 1;
+					   });
 }
 void OpC9() { // ret
-	unsigned addr = Read(sp++);
-	addr += 0x100*Read(sp++);
-	pc = addr;
-	memptr = addr;
+	pc = memptr = Read2Inc(sp);
 	t += 6;
 }
 void OpCA() { // jp z,nnnn
 	t += 6;
-	unsigned addr = Read(pc);
-	addr += 0x100*Read(pc+1);
-	memptr = addr;
-	if(f & ZF)
-	{
-		pc = addr;
-	}
-	else
-		pc += 2;
+	memptr = Read2(pc);
+	return if_flag_set(ZF,
+						 [&] {
+							 pc = memptr;
+						 },
+						 [&] {
+							 pc += 2;
+						 });
+
 }
 void OpCC() { // call z,nnnn
-	pc += 2;
-	unsigned addr = Read(pc-2);
-	addr += 0x100*Read(pc-1);
-	memptr = addr;
-	if (f & ZF) {
-		Write(--sp, pc_h);
-		Write(--sp, pc_l);
-		pc = addr;
-		t += 13;
-	} else t += 6;
+	memptr = Read2Inc(pc);
+	return if_flag_set(ZF,
+						 [&]{
+							 push(pc);
+							 pc = memptr;
+							 t += 13;
+						 },
+						 [&]{
+							 t += 6;
+						 });
 }
 void OpCD() { // call
-	unsigned addr = Read(pc++);
-	addr += 0x100*Read(pc++);
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
+	temp16 addr = Read2Inc(pc);
+	push(pc);
 	pc = addr;
 	memptr = addr;
 	t += 13;
 }
 void OpCE() { // adc a,nn
-	adc8(Read(pc++));
+	adc8(ReadInc(pc));
 	t += 3;
 }
 void OpCF() { // rst 08
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
-	pc = 0x08;
-	memptr = 0x08;
-	mem_h = 0;
-	t += 7;
+	rst_idone(0x8);
 }
 void OpD0() { // ret nc
-	if (!(f & CF)) {
-		unsigned addr = Read(sp++);
-		addr += 0x100*Read(sp++);
-		pc = addr;
-		memptr = addr;
-		t += 7;
-	} else t += 1;
+	return if_flag_clear(CF,
+					   [&] {
+						   pc = memptr = Read2Inc(sp);
+						   t += 7;
+					   },
+					   [&] {
+						   t += 1;
+					   });
 }
 void OpD1() { // pop de
-	e = Read(sp++);
-	d = Read(sp++);
+	de = Read2Inc(sp);
 	t += 6;
 }
 void OpD2() { // jp nc,nnnn
 	t += 6;
-	unsigned addr = Read(pc);
-	addr += 0x100*Read(pc+1);
-	memptr = addr;
-	if (!(f & CF)) {
-		pc = addr;
-	} else pc += 2;
+	memptr = Read2(pc);
+	return if_flag_clear(CF,
+						 [&] {
+							 pc = memptr;
+						 },
+						 [&] {
+							 pc += 2;
+						 });
 }
 void OpD3() { // out (nn),a
-	unsigned port = Read(pc++);
+	temp16 port = ReadInc(pc);
 	t += 7;
-	memptr = ((port+1) & 0xFF) + (a << 8);
-	IoWrite(port + (a << 8), a);
+	temp16_2 a_hi = a << 8;
+	memptr = ((port+1) & 0xFF) | a_hi;
+	IoWrite(port | a_hi, a);
 }
 void OpD4() { // call nc,nnnn
-	pc += 2;
-	unsigned addr = Read(pc-2);
-	addr += 0x100*Read(pc-1);
-	memptr = addr;
-	if (!(f & CF)) {
-		Write(--sp, pc_h);
-		Write(--sp, pc_l);
-		pc = addr;
-		t += 13;
-	} else t += 6;
+	memptr = Read2Inc(pc);
+	return if_flag_clear(CF,
+						 [&]{
+							 push(pc);
+							 pc = memptr;
+							 t += 13;
+						 },
+						 [&]{
+							 t += 6;
+						 });
 }
 void OpD5() { // push de
 	t += 7;
-	Write(--sp, d);
-	Write(--sp, e);
+	push(de);
 }
 void OpD6() { // sub nn
-	sub8(Read(pc++));
+	sub8(ReadInc(pc));
 	t += 3;
 }
 void OpD7() { // rst 10
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
-	pc = 0x10;
-	memptr = 0x10;
-	t += 7;
+	rst_idone(0x10);
 }
+
 void OpD8() { // ret c
-	if (f & CF) {
-		unsigned addr = Read(sp++);
-		addr += 0x100*Read(sp++);
-		pc = addr;
-		memptr = addr;
-		t += 7;
-	} else t += 1;
+	return if_flag_set(CF,
+					   [&] {
+						   pc = memptr = Read2Inc(sp);
+						   t += 7;
+					   },
+					   [&] {
+						   t += 1;
+					   });
 }
+
+#ifndef USE_Z80T
 void OpD9() { // exx
 	unsigned tmp = bc; bc = alt.bc; alt.bc = tmp;
 	tmp = de; de = alt.de; alt.de = tmp;
 	tmp = hl; hl = alt.hl; alt.hl = tmp;
 }
+#endif
+
 void OpDA() { // jp c,nnnn
 	t += 6;
-	unsigned addr = Read(pc);
-	addr += 0x100*Read(pc+1);
-	memptr = addr;
-	if (f & CF) {
-		pc = addr;
-	} else pc += 2;
+	memptr = Read2(pc);
+	return if_flag_set(CF,
+						 [&] {
+							 pc = memptr;
+						 },
+						 [&] {
+							 pc += 2;
+						 });
 }
 void OpDB() { // in a,(nn)
-	unsigned port = Read(pc++) + (a << 8);
+	temp16 port = ReadInc(pc);
+	port |= (a << 8);
 	memptr = port+1;
 	t += 7;
 	a = IoRead(port);
 }
 void OpDC() { // call c,nnnn
-	pc += 2;
-	unsigned addr = Read(pc-2);
-	addr += 0x100*Read(pc-1);
-	memptr = addr;
-	if (f & CF) {
-		Write(--sp, pc_h);
-		Write(--sp, pc_l);
-		pc = addr;
-		t += 13;
-	} else t += 6;
+	memptr = Read2Inc(pc);
+	return if_flag_set(CF,
+						 [&]{
+							 push(pc);
+							 pc = memptr;
+							 t += 13;
+						 },
+						 [&]{
+							 t += 6;
+						 });
 }
 void OpDE() { // sbc a,nn
-	sbc8(Read(pc++));
+	sbc8(ReadInc(pc));
 	t += 3;
 }
 void OpDF() { // rst 18
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
-	pc = 0x18;
-	memptr = 0x18;
-	t += 7;
+	rst_idone(0x18);
 }
 void OpE0() { // ret po
-	if (!(f & PV)) {
-		unsigned addr = Read(sp++);
-		addr += 0x100*Read(sp++);
-		pc = addr;
-		memptr = addr;
-		t += 7;
-	} else t += 1;
+	return if_flag_clear(PV,
+					   [&] {
+						   pc = memptr = Read2Inc(sp);
+						   t += 7;
+					   },
+					   [&] {
+						   t += 1;
+					   });
 }
 void OpE1() { // pop hl
-	l = Read(sp++);
-	h = Read(sp++);
+	hl = Read2Inc(sp);
 	t += 6;
 }
 void OpE2() { // jp po,nnnn
 	t += 6;
-	unsigned addr = Read(pc);
-	addr += 0x100*Read(pc+1);
-	memptr = addr;
-	if (!(f & PV)) {
-		pc = addr;
-	} else pc += 2;
+	memptr = Read2(pc);
+	return if_flag_clear(PV,
+						 [&] {
+							 pc = memptr;
+						 },
+						 [&] {
+							 pc += 2;
+						 });
 }
 void OpE3() { // ex (sp),hl
-	unsigned tmp = Read(sp) + 0x100*Read(sp + 1);
-	Write(sp, l);
-	Write(sp+1, h);
+	temp16 tmp = Read2(sp);
+	Write2(sp, hl);
 	memptr = tmp;
 	hl = tmp;
 	t += 15;
 }
 void OpE4() { // call po,nnnn
-	pc += 2;
-	unsigned addr = Read(pc-2);
-	addr += 0x100*Read(pc-1);
-	memptr = addr;
-	if (!(f & PV)) {
-		Write(--sp, pc_h);
-		Write(--sp, pc_l);
-		pc = addr;
-		t += 13;
-	} else t += 6;
+	memptr = Read2Inc(pc);
+	return if_flag_clear(PV,
+						 [&]{
+							 push(pc);
+							 pc = memptr;
+							 t += 13;
+						 },
+						 [&]{
+							 t += 6;
+						 });
 }
 void OpE5() { // push hl
 	t += 7;
-	Write(--sp, h);
-	Write(--sp, l);
+	push(hl);
 }
 void OpE6() { // and nn
-	and8(Read(pc++));
+	and8(ReadInc(pc));
 	t += 3;
 }
 void OpE7() { // rst 20
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
-	pc = 0x20;
-	memptr = 0x20;
-	t += 7;
+	rst_idone(0x20);
 }
 void OpE8() { // ret pe
-	if (f & PV) {
-		unsigned addr = Read(sp++);
-		addr += 0x100*Read(sp++);
-		pc = addr;
-		memptr = addr;
-		t += 7;
-	} else t += 1;
+	return if_flag_set(PV,
+					   [&] {
+						   pc = memptr = Read2Inc(sp);
+						   t += 7;
+					   },
+					   [&] {
+						   t += 1;
+					   });
 }
 void OpE9() { // jp (hl)
 	pc = hl;
 }
 void OpEA() { // jp pe,nnnn
 	t += 6;
-	unsigned addr = Read(pc);
-	addr += 0x100*Read(pc+1);
-	memptr = addr;
-	if (f & PV) {
-		pc = addr;
-	} else pc += 2;
+	memptr = Read2(pc);
+	return if_flag_set(PV,
+						 [&] {
+							 pc = memptr;
+						 },
+						 [&] {
+							 pc += 2;
+						 });
 }
 void OpEB() { // ex de,hl
-	unsigned tmp = de;
+	temp16 tmp;
+	tmp = de;
 	de = hl;
 	hl = tmp;
 }
 void OpEC() { // call pe,nnnn
-	pc += 2;
-	unsigned addr = Read(pc-2);
-	addr += 0x100*Read(pc-1);
-	memptr = addr;
-	if (f & PV) {
-		Write(--sp, pc_h);
-		Write(--sp, pc_l);
-		pc = addr;
-		t += 13;
-	} else t += 6;
+	memptr = Read2Inc(pc);
+	return if_flag_set(PV,
+						 [&]{
+							 push(pc);
+							 pc = memptr;
+							 t += 13;
+						 },
+						 [&]{
+							 t += 6;
+						 });
 }
 void OpEE() { // xor nn
-	xor8(Read(pc++));
+	xor8(ReadInc(pc));
 	t += 3;
 }
 void OpEF() { // rst 28
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
-	pc = 0x28;
-	memptr = 0x28;
-	t += 7;
+	rst_idone(0x28);
 }
 void OpF0() { // ret p
-	if (!(f & SF)) {
-		unsigned addr = Read(sp++);
-		addr += 0x100*Read(sp++);
-		pc = addr;
-		memptr = addr;
-		t += 7;
-	} else t += 1;
+	return if_flag_clear(SF,
+					   [&] {
+						   pc = memptr = Read2Inc(sp);
+						   t += 7;
+					   },
+					   [&] {
+						   t += 1;
+					   });
 }
 void OpF1() { // pop af
-	f = Read(sp++);
-	a = Read(sp++);
+	af = Read2Inc(sp);
 	t += 6;
 }
 void OpF2() { // jp p,nnnn
 	t += 6;
-	unsigned addr = Read(pc);
-	addr += 0x100*Read(pc+1);
-	memptr = addr;
-	if (!(f & SF)) {
-		pc = addr;
-	} else pc += 2;
+	memptr = Read2(pc);
+	return if_flag_clear(SF,
+						 [&] {
+							 pc = memptr;
+						 },
+						 [&] {
+							 pc += 2;
+						 });
 }
 void OpF3() { // di
-	iff1 = iff2 = 0;
+	iff1 = 0;
+	iff2 = 0;
 }
 void OpF4() { // call p,nnnn
-	pc += 2;
-	unsigned addr = Read(pc-2);
-	addr += 0x100*Read(pc-1);
-	memptr = addr;
-	if (!(f & SF)) {
-		Write(--sp, pc_h);
-		Write(--sp, pc_l);
-		pc = addr;
+	memptr = Read2Inc(pc);
+	return if_flag_clear(SF,
+	[&]{
+		push(pc);
+		pc = memptr;
 		t += 13;
-	} else t += 6;
+	},
+	[&]{
+		t += 6;
+	});
 }
 void OpF5() { // push af
 	t += 7;
-	Write(--sp, a);
-	Write(--sp, f);
+	push(af);
 }
 void OpF6() { // or nn
-	or8(Read(pc++));
+	or8(ReadInc(pc));
 	t += 3;
 }
 void OpF7() { // rst 30
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
-	pc = 0x30;
-	memptr = 0x30;
-	t += 7;
+	rst_idone(0x30);
 }
 void OpF8() { // ret m
-	if (f & SF) {
-		unsigned addr = Read(sp++);
-		addr += 0x100*Read(sp++);
-		pc = addr;
-		memptr = addr;
-		t += 7;
-	} else t += 1;
+	return if_flag_set(SF,
+					   [&] {
+						   pc = memptr = Read2Inc(sp);
+						   t += 7;
+					   },
+					   [&] {
+						   t += 1;
+					   });
 }
 void OpF9() { // ld sp,hl
 	sp = hl;
@@ -1132,39 +1137,37 @@ void OpF9() { // ld sp,hl
 }
 void OpFA() { // jp m,nnnn
 	t += 6;
-	unsigned addr = Read(pc);
-	addr += 0x100*Read(pc+1);
-	memptr = addr;
-	if (f & SF) {
-		pc = addr;
-	} else pc += 2;
+	memptr = Read2(pc);
+	return if_flag_set(SF,
+						 [&] {
+							 pc = memptr;
+						 },
+						 [&] {
+							 pc += 2;
+						 });
 }
 void OpFB() { // ei
 	iff1 = iff2 = 1;
 	eipos = t;
 }
 void OpFC() { // call m,nnnn
-	pc += 2;
-	unsigned addr = Read(pc-2);
-	addr += 0x100*Read(pc-1);
-	memptr = addr;
-	if (f & SF) {
-		Write(--sp, pc_h);
-		Write(--sp, pc_l);
-		pc = addr;
-		t += 13;
-	} else t += 6;
+	memptr = Read2Inc(pc);
+	return if_flag_set(SF,
+						 [&]{
+							 push(pc);
+							 pc = memptr;
+							 t += 13;
+						 },
+						 [&]{
+							 t += 6;
+						 });
 }
 void OpFE() { // cp nn
-	cp8(Read(pc++));
+	cp8(ReadInc(pc));
 	t += 3;
 }
 void OpFF() { // rst 38
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
-	pc = 0x38;
-	memptr = 0x38;
-	t += 7;
+	rst_idone(0x38);
 }
 
 #endif//__Z80_OP_NOPREFIX_H__

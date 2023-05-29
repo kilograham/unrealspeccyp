@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,10 +30,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 class eBeeper : public eDeviceSound
 {
 public:
-	virtual bool IoWrite(word port) const;
-	virtual void IoWrite(word port, byte v, int tact);
+	eBeeper();
+	void IoWrite(word port, byte v, int tact) override;
 	static eDeviceId Id() { return D_BEEPER; }
+	void Reset() override;
+#ifndef USE_HACKED_DEVICE_ABSTRACTION
+	virtual bool IoWrite(word port) const;
 	virtual dword IoNeed() const { return ION_WRITE; }
+#endif
+	void FrameStart(dword tacts) override;
+	void FrameEnd(dword tacts) override;
 };
 
 #endif//__BEEPER_H__

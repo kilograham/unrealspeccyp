@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -33,7 +34,11 @@ class eSpeccy
 {
 public:
 	eSpeccy();
+#ifndef NO_USE_DESTRUCTORS
 	virtual ~eSpeccy();
+#else
+	~eSpeccy() =delete;
+#endif
 
 	void Reset();
 	void Update(int* fetches = NULL);
@@ -45,8 +50,10 @@ public:
 
 	qword T() const { return t_states; }
 
+#ifndef NO_USE_128K
 	bool Mode48k() const;
 	void Mode48k(bool on);
+#endif
 
 protected:
 	xZ80::eZ80* cpu;

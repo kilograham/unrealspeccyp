@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,7 +25,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 namespace xIo
 {
 
-enum { MAX_PATH_LEN = 1024 };
+enum {
+#ifndef USE_MU
+    MAX_PATH_LEN = 1024
+#else
+    MAX_PATH_LEN = 64
+#endif
+};
 
 void SetResourcePath(const char* resource_path);
 const char* ResourcePath(const char* path);

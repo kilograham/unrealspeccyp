@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -31,7 +32,8 @@ public:
 		next = n;
 	}
 	static T* First() { return _First(); }
-	T* Next() { return next; }
+
+	virtual T* Next() { return next; }
 	const T* Next() const { return next; }
 protected:
 	static T*& _First() { static T* first = NULL; return first; }

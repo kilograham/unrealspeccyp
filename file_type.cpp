@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2012 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -32,7 +33,8 @@ const eFileType* eFileType::FindByName(const char* name)
 	while(ext >= name && *ext != '.')
 		--ext;
 	++ext;
-	char type[xIo::MAX_PATH_LEN];
+	assert(name + l + 1 - ext < 8);
+	char type[name + l + 1 - ext];
 	char* t = type;
 	while(*ext)
 	{
@@ -47,6 +49,7 @@ const eFileType* eFileType::FindByName(const char* name)
 
 bool eFileType::Open(const char* name) const
 {
+#ifndef USE_MU_SIMPLIFICATIONS
 	for(const eFileType* t = First(); t; t = t->Next())
 	{
 		char contain_path[xIo::MAX_PATH_LEN];
@@ -56,13 +59,15 @@ bool eFileType::Open(const char* name) const
 			return t->Open(name);
 		}
 	}
+#endif
+#ifndef USE_EMBEDDED_FILES
 	FILE* f = fopen(name, "rb");
 	if(f)
 	{
 		fseek(f, 0, SEEK_END);
 		size_t size = ftell(f);
 		fseek(f, 0, SEEK_SET);
-		byte* buf = new byte[size];
+		byte* buf = (byte*)malloc(size);
 		size_t r = fread(buf, 1, size, f);
 		fclose(f);
 		if(r != size)
@@ -70,10 +75,18 @@ bool eFileType::Open(const char* name) const
 			SAFE_DELETE_ARRAY(buf);
 			return false;
 		}
+#ifndef USE_STREAM
 		bool ok = Open(buf, size);
-		SAFE_DELETE_ARRAY(buf);
+#else
+		struct stream *stream = memory_stream_open(buf, size, true);
+		bool ok = Open(stream);
+#endif
+		free(buf);
 		return ok;
 	}
+#else
+	assert(false);
+#endif
 	return false;
 }
 

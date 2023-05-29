@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -32,52 +33,39 @@ class eUla : public eDevice
 {
 public:
 	eUla(eMemory* m);
+#ifndef NO_USE_DESTRUCTORS
 	virtual ~eUla();
+#endif
 	virtual void Init();
 	virtual void Reset();
 	virtual void FrameUpdate();
-	virtual bool IoRead(word port) const;
-	virtual bool IoWrite(word port) const;
-	virtual void IoRead(word port, byte* v, int tact);
-	virtual void IoWrite(word port, byte v, int tact);
-	void	Write(int tact) { if(prev_t < tact) UpdateRay(tact); }
 
-	void*	Screen() const { return screen; }
+#ifndef USE_HACKED_DEVICE_ABSTRACTION
+	virtual bool IoRead(word port) const final;
+	virtual bool IoWrite(word port) const final;
+	virtual dword IoNeed() const { return ION_WRITE|ION_READ; }
+#endif
+	virtual void IoRead(word port, byte* v, int tact) final;
+	virtual void IoWrite(word port, byte v, int tact) final;
+	void	Write(int tact) {
+		if(prev_t < tact) UpdateRay(tact);
+	}
 
 	byte	BorderColor() const { return border_color; }
 	bool	FirstScreen() const { return first_screen; }
+#ifndef NO_USE_128K
 	void	Mode48k(bool on)	{ mode_48k = on; }
+#endif
 
 	static eDeviceId Id() { return D_ULA; }
-	virtual dword IoNeed() const { return ION_WRITE|ION_READ; }
-protected:
-	void	CreateTables();
-	void	CreateTimings();
+	bool    GetLineInfo(int l, byte& border, const byte *& attr, const byte *& pixels);
+#ifndef NO_USE_128K
 	void	SwitchScreen(bool first, int tact);
+#endif
+protected:
 	void	UpdateRay(int tact);
-	void	UpdateRayBorder(int& t, int last_t);
-	void	UpdateRayPaper(int& t, int last_t);
-	void	FlushScreen();
 
 	enum eScreen { S_WIDTH = 320, S_HEIGHT = 240, SZX_WIDTH = 256, SZX_HEIGHT = 192 };
-	struct eTiming
-	{
-		enum eZone { Z_SHADOW, Z_BORDER, Z_PAPER };
-		void Set(int _t, eZone _zone = Z_SHADOW, byte* _dst = NULL
-			, int _scr_offs = 0, int _attr_offs = 0)
-		{
-			dst			= _dst;
-			t			= _t;
-			zone		= _zone;
-			scr_offs	= _scr_offs;
-			attr_offs	= _attr_offs;
-		}
-		byte*	dst;		// screen raster pointer
-		int		t;			// start zone tact
-		eZone	zone;		// what are drawing: shadow/border/screen
-		int		scr_offs;
-		int		attr_offs;
-	};
 protected:
 	eMemory* memory;
 	int		line_tacts;		// t-states per line
@@ -85,18 +73,19 @@ protected:
 	byte	border_color;
 	bool	first_screen;
 	byte*	base;
-	byte*	screen;
-	int		scrtab[256];	// offset to start of line
-	int		atrtab[256];	// offset to start of attribute line
-	byte	colortab1[256];	// map zx attributes to pc attributes
-	byte	colortab2[256];
-	byte*	colortab;
 
-	eTiming	timings[4 * S_HEIGHT];
-	eTiming* timing;
-	int		prev_t;			// last drawn pixel's tact
+	int     prev_t;
+	int		border_y;		// last update ray y pos
+	bool    in_paper;
 	int		frame;
+	// only valid if in_paper = true;
+	int     paper_x, paper_y;
+#ifndef NO_USE_128K
 	bool	mode_48k;
+#else
+	static const bool mode_48k = false;
+#endif
+	byte    border_colors[S_HEIGHT];
 };
 
 #endif//__ULA_H__

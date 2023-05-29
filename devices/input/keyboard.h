@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,12 +29,14 @@ class eKeyboard : public eDevice
 public:
 	virtual void Init();
 	virtual void Reset();
-	virtual bool IoRead(word port) const;
-	virtual void IoRead(word port, byte* v, int tact);
+	virtual void IoRead(word port, byte* v, int tact) final;
 	void OnKey(char key, bool down, bool shift, bool ctrl, bool alt);
 
 	static eDeviceId Id() { return D_KEYBOARD; }
+#ifndef USE_HACKED_DEVICE_ABSTRACTION
+    virtual bool IoRead(word port) const final;
 	virtual dword IoNeed() const { return ION_READ; }
+#endif
 protected:
 	void KeyState(char key, bool down);
 	byte Read(byte scan) const;

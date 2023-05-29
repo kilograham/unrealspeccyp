@@ -1,0 +1,84 @@
+;
+; Copyright (c) 2023 Graham Sanderson
+;
+; SPDX-License-Identifier: BSD-3-Clause
+;
+
+; format || a | b || c0-7 || ...
+;
+; c0-c7 are each 4 bit
+;
+; main display: each 2 x 32 block displays 8 pixels at 4 cycles per pixel
+;    a is paper color
+;    b is ink color
+;    c0-c6 are "jmp paper" or "jmp ink"
+;    c7 is "jmp paper_end_of_block" or "jmp ink_end_of_block"
+;
+; border segments: 2 x 32 block does a single run of pixels
+;    a is color
+;    b is count + 3
+;    c0 is "jmp color_run"
+;
+; end of line: 2 x 32 block ends (inefficiently) a scanline (and blanks the pins)
+;    c0 is "jmp end_of_line"
+;    c1-c7 must be 0 as they are outed onto pins (strictly c1-c4 hold the pixel value)
+;
+
+.program video_khan
+.origin 0
+public paper:
+public delay1:
+    mov pins, x [2]
+    out pc, 4
+
+public end_of_line:
+    out pins, 28 ; required to flush OSR and clear pins
+public entry_point:
+    wait irq 4
+    jmp new_block
+
+public ink:
+public delay2:
+    mov pins, y [2]
+    out pc, 4
+
+public color_run: ; of y + 3
+public delay3:
+    mov pins, x
+color_run_loop:
+public delay4:
+    jmp y-- color_run_loop [3]
+    out null, 28 ; // discard rest
+    jmp new_block [2]
+
+public paper_end_of_block:
+    mov pins, x
+.wrap_target
+new_block:
+public delay5:
+    out x, 16
+    out y, 16
+    out pc, 4
+
+public ink_end_of_block:
+    mov pins, y
+    .wrap
+
+// cannot have autopull
+// runs of 1 bit audio where the 1 bit has volume!! it is output as is an N+2 bit pattern where N is the bit threshold of the SM ...
+// the carrier frequency = CLK / (2 * (N+2))
+// note zeros are included beyond the pattern for N > 16
+.program beeper
+cycle_loop:
+    nop [2]
+.wrap_target
+    mov osr, y
+bit_loop:
+    out pins, 1
+    jmp !osre bit_loop
+    jmp x-- cycle_loop
+public entry_point:
+    pull
+    out x, 16 // cycle count
+    out y, 16 // bit pattern
+.wrap

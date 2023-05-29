@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef USE_UI
 #include "../../std.h"
 #include "ui_file_open.h"
 #include "../../ui/ui_list.h"
@@ -27,7 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "../../file_type.h"
 #include <ctype.h>
 
-#ifdef USE_UI
+#ifdef USE_FILE_OPEN
 
 namespace xUi
 {
@@ -188,4 +190,5 @@ void eFileOpenDialog::OnNotify(byte n, byte from)
 }
 //namespace xUi
 
+#endif
 #endif//USE_UI

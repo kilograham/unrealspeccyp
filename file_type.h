@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2012 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,6 +24,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
+#ifdef USE_STREAM
+#include "stream.h"
+#endif
 namespace xIo
 {
 class eFileSelect;
@@ -35,7 +39,11 @@ namespace xPlatform
 struct eFileType : public eList<eFileType>
 {
 	static const eFileType* First() { return _First(); }
+#ifndef USE_STREAM
 	virtual bool Open(const void* data, size_t data_size) const = 0;
+#else
+	virtual bool Open(struct stream *stream) const = 0;
+#endif
 	virtual bool Open(const char* name) const;
 	virtual bool Store(const char* name) const { return false; }
 	virtual bool AbleOpen() const { return true; }

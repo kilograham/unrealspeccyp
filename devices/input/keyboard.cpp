@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -33,6 +34,7 @@ void eKeyboard::Reset()
 {
 	memset(kbd, 0xff, sizeof(kbd));
 }
+#ifndef USE_HACKED_DEVICE_ABSTRACTION
 //=============================================================================
 //	eKeyboard::IoRead
 //-----------------------------------------------------------------------------
@@ -40,6 +42,7 @@ bool eKeyboard::IoRead(word port) const
 {
 	return !(port&1);
 }
+#endif
 //=============================================================================
 //	eKeyboard::IoRead
 //-----------------------------------------------------------------------------

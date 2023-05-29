@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,14 +24,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-union SNDSAMPLE
-{
-	dword sample; // left/right channels in low/high WORDs
-	struct { word left, right; } ch; // or left/right separately
-};
-
+//union SNDSAMPLE
+//{
+//	dword sample; // left/right channels in low/high WORDs
+//	struct { word left, right; } ch; // or left/right separately
+//};
+//
 const dword SNDR_DEFAULT_SYSTICK_RATE = 71680 * 50; // ZX-Spectrum Z80 clock
-const dword SNDR_DEFAULT_SAMPLE_RATE = 44100;
+
+#if defined(USE_MU) && PICO_ON_DEVICE
+#if KHAN128_I2S
+#define PICO_SAMPLE_RATE 24000 // some I2S chips seem unhappy with 22050
+#else
+// PWM must be 22058
+#define PICO_SAMPLE_RATE 22058
+#endif
+#else
+#define PICO_SAMPLE_RATE 44100
+#endif
+
+const dword SNDR_DEFAULT_SAMPLE_RATE = PICO_SAMPLE_RATE;
 
 //=============================================================================
 //	eDeviceSound
@@ -39,31 +52,19 @@ class eDeviceSound : public eDevice
 {
 public:
 	eDeviceSound();
-	void SetTimings(dword clock_rate, dword sample_rate);
+//	void SetTimings(dword clock_rate, dword sample_rate);
 
 	virtual void FrameStart(dword tacts);
 	virtual void FrameEnd(dword tacts);
 	virtual void Update(dword tact, dword l, dword r);
 
-	enum { BUFFER_LEN = 16384 };
-
-	void* AudioData();
-	dword AudioDataReady();
-	void AudioDataUse(dword size);
-
 protected:
 	dword mix_l, mix_r;
-	SNDSAMPLE* dstpos;
-	dword clock_rate, sample_rate;
-
-	SNDSAMPLE buffer[BUFFER_LEN];
+//	dword clock_rate, sample_rate;
 
 private:
-	dword tick, base_tick;
-	dword s1_l, s1_r;
-	dword s2_l, s2_r;
-
-	void Flush(dword endtick);
+	void Flush(int64_t endtick);
 };
 
 #endif//__DEVICE_SOUND_H__
+

@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,140 +25,63 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define Max(o, p)	(o > p ? o : p)
 #define Min(o, p)	(o < p ? o : p)
 
+#define line_tacts 224
+#define paper_start	17989
+#define mid_lines SZX_HEIGHT
+#define buf_mid SZX_WIDTH
+#define b_top ((S_HEIGHT - mid_lines) / 2)
+#define b_left ((S_WIDTH - buf_mid) / 2)
+#define first_line_t (paper_start - b_top * line_tacts - b_left / 2)
+
+// this produces very nice code on ARM!
+#define hideous_divide_by_224(x) (((((x)*0x1249) + (((x)*0x1249)>>15)) + 255)>>20)
+
+#define speccy_y_to_normal(y) (((y) & 0xc0) + (((y)&7) << 3) + (((y) >> 3) & 7))
+// it is self inverse
+#define normal_to_speccy_y(y) speccy_y_to_normal(y)
 //=============================================================================
 //	eUla::eUla
 //-----------------------------------------------------------------------------
-eUla::eUla(eMemory* m) : memory(m), border_color(0), first_screen(true), base(NULL)
-	, colortab(NULL), timing(NULL), prev_t(0), frame(0), mode_48k(false)
+eUla::eUla(eMemory* m) : memory(m), border_color(0), first_screen(true), base(NULL),
+						 prev_t(0), border_y(0), in_paper(false), frame(0)
+#ifndef NO_USE_128K
+		,mode_48k(false)
+#endif
 {
-	screen = new byte[S_WIDTH * S_HEIGHT];
-	memset(screen, 0, S_WIDTH * S_HEIGHT);
 }
 //=============================================================================
 //	eUla::~eUla
 //-----------------------------------------------------------------------------
+#ifndef NO_USE_DESTRUCTORS
 eUla::~eUla()
 {
+#ifndef NO_USE_SCREEN
 	SAFE_DELETE_ARRAY(screen);
+#endif
 }
+#endif
 //=============================================================================
 //	eUla::Init
 //-----------------------------------------------------------------------------
 void eUla::Init()
 {
-	// pentagon timings
-	line_tacts	= 224;
-	paper_start	= 17989;
-	prev_t = 0;
-	timing = timings;
+	border_y = prev_t = 0;
+	in_paper = false;
+#ifndef NO_USE_SCREEN
 	colortab = colortab1;
-	CreateTables();
-	CreateTimings();
+#endif
 	base = memory->Get(eMemory::P_RAM5);
-}
-//=============================================================================
-//	eUla::CreateTables
-//-----------------------------------------------------------------------------
-void eUla::CreateTables()
-{
-	int i = 0; // calc screen addresses
-	for(int p = 0; p < 4; p++)
-	{
-		for(int y = 0; y < 8; y++)
-		{
-			for(int o = 0; o < 8; o++, i++)
-			{
-				scrtab[i] = p*0x800 + y*0x20 + o*0x100,
-					atrtab[i] = 0x1800 + (p*8+y)*32;
-			}
-		}
-	}
-
-	// make colortab: zx-attr -> pc-attr
-	for(int a = 0; a < 0x100; a++)
-	{
-		byte ink	= a & 7;
-		byte paper	= (a >> 3) & 7;
-		byte bright	= (a >> 6) & 1;
-		byte flash	= (a >> 7) & 1;
-		if(ink)
-			ink |= bright << 3;		// no bright for 0th color
-		if(paper)
-			paper |= bright << 3;	// no bright for 0th color
-		byte c1 = (paper << 4) | ink;
-		if(flash)
-		{
-			byte t = ink;
-			ink = paper;
-			paper = t;
-		}
-		byte c2 = (paper << 4) | ink;
-		colortab1[a] = c1;
-		colortab2[a] = c2;
-	}
-}
-//=============================================================================
-//	eUla::CreateTimings
-//-----------------------------------------------------------------------------
-// each cpu tact ula painted 2pix
-// while painted border ula read color value on each 2pix, on paper each 8pix
-//-----------------------------------------------------------------------------
-void eUla::CreateTimings()
-{
-	int b_bottom, b_top, b_left, b_right;
-	int mid_lines = SZX_HEIGHT, buf_mid = SZX_WIDTH;
-	b_top = b_bottom = (S_HEIGHT - mid_lines) / 2;
-	b_left = b_right = (S_WIDTH - buf_mid) / 2;
-
-	int scr_width = S_WIDTH;
-	int idx = 0;
-
-	timings[idx++].Set(0, eTiming::Z_SHADOW); // to skip non visible area
-	int line_t = paper_start - b_top * line_tacts - b_left / 2;
-	for(int i = 0; i < b_top; ++i) // top border
-	{
-		byte* dst = screen + scr_width * i;
-		timings[idx++].Set(Max(line_t, 0), eTiming::Z_BORDER, dst);
-
-		int t = Max(line_t + (b_left + buf_mid + b_right) / 2, 0);
-		timings[idx++].Set(t, eTiming::Z_SHADOW);
-		line_t += line_tacts;
-	}
-	for(int i = 0; i < mid_lines; ++i) // screen + border
-	{
-		byte* dst = screen + scr_width * (i + b_top);
-		timings[idx++].Set(Max(line_t, 0), eTiming::Z_BORDER, dst);
-
-		int t = Max(line_t + b_left / 2, 0);
-		dst = screen + scr_width * (i + b_top) + b_left;
-		timings[idx++].Set(t, eTiming::Z_PAPER, dst, scrtab[i], atrtab[i]);
-
-		t = Max(line_t + (b_left + buf_mid) / 2, 0);
-		dst = screen + scr_width * (i + b_top) + b_left + buf_mid;
-		timings[idx++].Set(t, eTiming::Z_BORDER, dst);
-
-		t = Max(line_t + (b_left + buf_mid + b_right) / 2, 0);
-		timings[idx++].Set(t, eTiming::Z_SHADOW);
-		line_t += line_tacts;
-	}
-	for(int i = 0; i < b_bottom; ++i) // bottom border
-	{
-		byte* dst = screen + scr_width * (i + b_top + mid_lines);
-		timings[idx++].Set(Max(line_t, 0), eTiming::Z_BORDER, dst);
-
-		int t = Max(line_t + (b_left + buf_mid + b_right) / 2, 0);
-		timings[idx++].Set(t, eTiming::Z_SHADOW);
-		line_t += line_tacts;
-	}
-	timings[idx].Set(0x7fffffff, eTiming::Z_SHADOW); // shadow area rest
 }
 //=============================================================================
 //	eUla::Reset
 //-----------------------------------------------------------------------------
 void eUla::Reset()
 {
+#ifndef NO_USE_128K
 	SwitchScreen(true, 0);
+#endif
 }
+#ifndef NO_USE_128K
 //=============================================================================
 //	eUla::SwitchScreen
 //-----------------------------------------------------------------------------
@@ -170,6 +94,8 @@ void eUla::SwitchScreen(bool first, int tact)
 	int page = first_screen ? eMemory::P_RAM5: eMemory::P_RAM7;
 	base = memory->Get(page);
 }
+#endif
+#ifndef USE_HACKED_DEVICE_ABSTRACTION
 //=============================================================================
 //	eUla::IoRead
 //-----------------------------------------------------------------------------
@@ -184,20 +110,19 @@ bool eUla::IoWrite(word port) const
 {
 	return !(port&1) || (!mode_48k && !(port & 2) && !(port & 0x8000));
 }
+#endif
 //=============================================================================
 //	eUla::IoRead
 //-----------------------------------------------------------------------------
 void eUla::IoRead(word port, byte* v, int tact)
 {
 	UpdateRay(tact);
-	if(timing->zone != eTiming::Z_PAPER) // ray is not in paper
+	if(!in_paper) // ray is not in paper
 	{
 		*v = 0xff;
 		return;
 	}
-	int t = tact;
-	int offs = (t - timing->t) / 4;
-	byte* atr = base + timing->attr_offs + offs;
+	byte* atr = base + 0x1800 + (paper_y / 8) * 32 + paper_x / 4;
 	*v = *atr;
 }
 //=============================================================================
@@ -213,10 +138,12 @@ void eUla::IoWrite(word port, byte v, int tact)
 			border_color = v & 7;
 		}
 	}
+#ifndef NO_USE_128K
 	if(!(port & 2) && !(port & 0x8000)) // zx128 port
 	{
 		SwitchScreen(!(v & 0x08), tact);
 	}
+#endif
 }
 //=============================================================================
 //	eUla::FrameUpdate
@@ -224,118 +151,55 @@ void eUla::IoWrite(word port, byte v, int tact)
 void eUla::FrameUpdate()
 {
 	UpdateRay(0x7fff0000);
-	prev_t = 0;
-	timing = timings;
+	in_paper = false;
+	border_y = 0;
 	if(++frame >= 15)
 	{
 		frame = 0;
-		colortab = colortab == colortab1 ? colortab2 : colortab1;
 	}
 }
+
+
+
 //=============================================================================
 //	UpdateRay
 //-----------------------------------------------------------------------------
 void eUla::UpdateRay(int tact)
 {
-	int t = prev_t;
-	while(t < tact)
-	{
-		switch(timing->zone)
-		{
-		case eTiming::Z_SHADOW:
-			t = (timing + 1)->t;
-			break;
-		case eTiming::Z_BORDER:
-			UpdateRayBorder(t, tact);
-			break;
-		case eTiming::Z_PAPER:
-			UpdateRayPaper(t, tact);
-			break;
+	int t = tact - first_line_t;
+	if (t > 0) {
+		// y = t / 224;
+		int32_t y = hideous_divide_by_224(t);
+		for(; border_y < Min(y, S_HEIGHT); border_y++) {
+			// todo left/right border or indeed changing mid line
+			border_colors[border_y] = border_color;
 		}
-		if(t == (timing + 1)->t)
-		{
-			timing++;
-		}
-	}
-	prev_t = t;
-}
-//=============================================================================
-//	eUla::UpdateRayBorder
-//-----------------------------------------------------------------------------
-void eUla::UpdateRayBorder(int& t, int last_t)
-{
-	int offs = (t - timing->t) * 2;
-	byte* dst = timing->dst + offs;
-	int end = Min(last_t, (timing + 1)->t);
-	for(; t < end; ++t)
-	{
-		*dst++ = border_color;
-		*dst++ = border_color;
-	}
-}
-//=============================================================================
-//	eUla::UpdateRayPaper
-//-----------------------------------------------------------------------------
-void eUla::UpdateRayPaper(int& t, int last_t)
-{
-	int offs = (t - timing->t) / 4;
-	byte* scr = base + timing->scr_offs + offs;
-	byte* atr = base + timing->attr_offs + offs;
-	byte* dst = timing->dst + offs * 8;
-	int end = Min(last_t, (timing + 1)->t);
-	for(int i = 0; t < end; ++i)
-	{
-		byte pix = scr[i];
-		byte ink = colortab[atr[i]];
-		byte paper = ink >> 4;
-		ink &= 0x0f;
-		for(int b = 0; b < 8; ++b)
-		{
-			*dst++ = ((pix << b) & 0x80) ? ink : paper;
-		}
-		t += 4;
-	}
-}
-//=============================================================================
-//	eUla::FlushScreen
-//-----------------------------------------------------------------------------
-void eUla::FlushScreen()
-{
-	int page = first_screen ? eMemory::P_RAM5: eMemory::P_RAM7;
-	byte* src = memory->Get(page);
-	byte* dst = screen;
-
-	int border_half_width = (S_WIDTH - SZX_WIDTH) / 2;
-	int border_half_height = (S_HEIGHT - SZX_HEIGHT) / 2;
-
-	for(int i = 0; i < border_half_height * S_WIDTH; ++i)
-	{
-		*dst++ = border_color;
-	}
-	for(int y = 0; y < SZX_HEIGHT; ++y)
-	{
-		for(int x = 0; x < border_half_width; ++x)
-		{
-			*dst++ = border_color;
-		}
-		for(int x = 0; x < SZX_WIDTH / 8; x++)
-		{
-			byte pix = *(src + scrtab[y] + x);
-			byte ink = colortab[*(src + atrtab[y] + x)];
-			byte paper = ink >> 4;
-			ink &= 0x0f;
-			for(int b = 0; b < 8; ++b)
-			{
-				*dst++ = ((pix << b) & 0x80) ? ink : paper;
+		in_paper = y >= b_top && y < (b_top + mid_lines);
+		if (in_paper) {
+			paper_x = t - y * 224 - b_left / 2;
+			paper_x = paper_x * 2;
+			if (paper_x < 0 || paper_x >= buf_mid) {
+				in_paper = false;
+			} else {
+				y -= b_top;
+				paper_y = speccy_y_to_normal(y);
 			}
 		}
-		for(int x = 0; x < border_half_width; ++x)
-		{
-			*dst++ = border_color;
-		}
 	}
-	for(int i = 0; i < border_half_height * S_WIDTH; ++i)
-	{
-		*dst++ = border_color;
+	prev_t = tact;
+}
+
+// note l is 0 based for top of display area, negative for top border
+bool eUla::GetLineInfo(int l, byte& border, const byte *& attr, const byte *& pixels) {
+	int sl = l + (S_HEIGHT - SZX_HEIGHT) / 2;
+	if (sl < 0) sl = 0;
+	if (sl >= S_HEIGHT) sl = S_HEIGHT - 1;
+	border = border_colors[sl];
+	if (l >= 0 && l < SZX_HEIGHT) {
+		pixels = base + normal_to_speccy_y(l) * 32;
+		attr = base + 0x1800 + (l >> 3) * 32;
+	} else {
+		pixels = attr = nullptr;
 	}
+	return true;
 }

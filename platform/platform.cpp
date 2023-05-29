@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,12 +29,15 @@ eHandler::eHandler()
 	assert(!handler);
 	handler = this;
 }
+#ifndef NO_USE_DESTRUCTORS
 eHandler::~eHandler()
 {
 	handler = NULL;
 }
+#endif
 eHandler* Handler() { return handler; }
 
+#ifndef USE_MU
 void GetScaleWithAspectRatio43(float* sx, float* sy, int _w, int _h)
 {
 	*sx = 1.0f;
@@ -45,6 +49,6 @@ void GetScaleWithAspectRatio43(float* sx, float* sy, int _w, int _h)
 	else
 		*sy = a/a43;
 }
-
+#endif
 }
 //namespace xPlatform

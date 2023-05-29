@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -32,11 +33,18 @@ namespace xZ80
 eZ80::eZ80(eMemory* _m, eDevices* _d, dword _frame_tacts)
 	: memory(_m), rom(_d->Get<eRom>()), ula(_d->Get<eUla>()), devices(_d)
 	, t(0), im(0), eipos(0)
-	, frame_tacts(_frame_tacts), fetches(0), reg_unused(0)
+	, frame_tacts(_frame_tacts),
+#ifndef NO_USE_REPLAY
+	fetches(0),
+#endif
+	reg_unused(0)
 {
 	pc = sp = ir = memptr = ix = iy = 0;
 	bc = de = hl = af = alt.bc = alt.de = alt.hl = alt.af = 0;
 	int_flags = 0;
+#ifndef NDEBUG
+	bp_addr = -1;
+#endif
 
 	InitOpNoPrefix();
 	InitOpCB();
@@ -58,7 +66,9 @@ eZ80::eZ80(eMemory* _m, eDevices* _d, dword _frame_tacts)
 //-----------------------------------------------------------------------------
 void eZ80::Reset()
 {
+#ifndef NO_USE_FAST_TAPE
 	handler.step = NULL;
+#endif
 	handler.io = NULL;
 	int_flags = 0;
 	ir = 0;
@@ -72,13 +82,44 @@ inline byte eZ80::Read(word addr) const
 {
 	return memory->Read(addr);
 }
+
+inline byte eZ80::ReadInc(int& addr) const
+{
+	return memory->Read(addr++);
+}
+
+inline int eZ80::Read2(word addr) const
+{
+	unsigned r = memory->Read(addr);
+	r += memory->Read(addr+1) << 8u;
+	return r;
+}
+
+inline int eZ80::Read2Inc(int& addr) const
+{
+	unsigned r = memory->Read(addr++);
+	r += memory->Read(addr++) << 8u;
+	return r;
+}
+
+
 //=============================================================================
 //	eZ80::StepF
 //-----------------------------------------------------------------------------
 void eZ80::StepF()
 {
+#ifndef NDEBUG
+#ifdef ENABLE_BREAKPOINT_IN_DEBUG
+		if (pc == bp_addr) {
+			breakpoint_hit();
+		}
+		last_pc = pc;
+#endif
+#endif
 	rom->Read(pc);
+#ifndef NO_USE_FAST_TAPE
 	SAFE_CALL(handler.step)->Z80_Step(this);
+#endif
 	(this->*normal_opcodes[Fetch()])();
 }
 //=============================================================================
@@ -86,6 +127,14 @@ void eZ80::StepF()
 //-----------------------------------------------------------------------------
 void eZ80::Step()
 {
+#ifndef NDEBUG
+#ifdef ENABLE_BREAKPOINT_IN_DEBUG
+	if (pc == bp_addr) {
+		breakpoint_hit();
+	}
+	last_pc = pc;
+#endif
+#endif
 	rom->Read(pc);
 	(this->*normal_opcodes[Fetch()])();
 }
@@ -94,6 +143,8 @@ void eZ80::Step()
 //-----------------------------------------------------------------------------
 void eZ80::Update(int int_len, int* nmi_pending)
 {
+//#define NO_USE_INTERRUPTS
+#ifndef NO_USE_INTERRUPTS
 	if(!iff1 && halted)
 		return;
 	// INT check separated from main Z80 loop to improve emulation speed
@@ -108,7 +159,9 @@ void eZ80::Update(int int_len, int* nmi_pending)
 		if(halted)
 			break;
 	}
+#endif
 	eipos = -1;
+#ifndef NO_USE_FAST_TAPE
 	if(handler.step)
 	{
 		while(t < frame_tacts)
@@ -117,6 +170,7 @@ void eZ80::Update(int int_len, int* nmi_pending)
 		}
 	}
 	else
+#endif
 	{
 		while(t < frame_tacts)
 		{
@@ -135,6 +189,7 @@ void eZ80::Update(int int_len, int* nmi_pending)
 	t -= frame_tacts;
 	eipos -= frame_tacts;
 }
+#ifndef NO_USE_REPLAY
 //=============================================================================
 //	eZ80::Replay
 //-----------------------------------------------------------------------------
@@ -151,6 +206,7 @@ void eZ80::Replay(int _fetches)
 		Int();
 	fetches = 0;
 }
+#endif
 //=============================================================================
 //	eZ80::Int
 //-----------------------------------------------------------------------------
@@ -164,8 +220,7 @@ void eZ80::Int()
 		intad = Read(vec) + 0x100*Read(vec+1);
 	}
 	t += (im < 2) ? 13 : 19;
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
+	push(pc);
 	pc = intad;
 	memptr = intad;
 	halted = 0;
@@ -177,10 +232,21 @@ void eZ80::Int()
 //-----------------------------------------------------------------------------
 void eZ80::Nmi()
 {
-	Write(--sp, pc_h);
-	Write(--sp, pc_l);
+	push(pc);
 	pc = 0x66;
 	iff1 = halted = 0;
 }
+
+#ifndef NDEBUG
+#ifdef ENABLE_BREAKPOINT_IN_DEBUG
+void eZ80::set_breakpoint(int _bp_addr) {
+	bp_addr = _bp_addr;
+}
+void eZ80::breakpoint_hit() {
+	static int i = 0;
+	printf("%d %d %04x %04x\n", i++, t, hl, af);
+}
+#endif
+#endif
 
 }//namespace xZ80

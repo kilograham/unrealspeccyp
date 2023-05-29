@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,13 +20,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef	__STD_H__
 #define	__STD_H__
 
+#include "pico.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include <assert.h>
 
 #include "std_types.h"
+
+#if defined(USE_MU) && PICO_ON_DEVICE
+#define __game_data const __attribute__((section(".rodata.game_data")))
+
+#else
+#define __time_critical
+#define __game_data const
+#endif
 
 #pragma once
 

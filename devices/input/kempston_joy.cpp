@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,12 +17,14 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifndef NO_USE_KEMPSTON
 #include "../../std.h"
 #include "kempston_joy.h"
 
 void eKempstonJoy::Init() { Reset(); }
 void eKempstonJoy::Reset() { state = 0; }
 
+#ifndef USE_MU
 //=============================================================================
 //	eKempstonJoy::IoRead
 //-----------------------------------------------------------------------------
@@ -35,6 +38,7 @@ bool eKempstonJoy::IoRead(word port) const
 		return false;
 	return true;
 }
+#endif
 //=============================================================================
 //	eKempstonJoy::IoRead
 //-----------------------------------------------------------------------------
@@ -48,14 +52,15 @@ struct eButton
 	char key;
 	byte bit;
 };
+#ifndef USE_MU
 enum { BUTTONS_COUNT = 5 };
 static const eButton buttons[BUTTONS_COUNT] =
 {
-	{'r',	0x01 },
-	{'l',	0x02 },
-	{'d',	0x04 },
-	{'u',   0x08 },
-	{'f',	0x10 },
+	{'r',	KEMPSTON_R },
+	{'l',	KEMPSTON_L },
+	{'d',	KEMPSTON_D },
+	{'u',   KEMPSTON_U },
+	{'f',	KEMPSTON_F },
 };
 //=============================================================================
 //	eKempstonJoy::OnKey
@@ -82,3 +87,5 @@ void eKempstonJoy::KeyState(char _key, bool _down)
 		}
 	}
 }
+#endif
+#endif

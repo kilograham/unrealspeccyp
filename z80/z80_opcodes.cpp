@@ -1,6 +1,7 @@
 /*
 Portable ZX-Spectrum emulator.
 Copyright (C) 2001-2010 SMT, Dexus, Alone Coder, deathsoft, djdron, scor
+Copyright (C) 2023 Graham Sanderson
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -48,6 +49,14 @@ void eZ80::Write(word addr, byte v)
 	ula->Write(t);
 	memory->Write(addr, v);
 }
+
+void eZ80::Write2(word addr, int v)
+{
+	Write(addr, v&0xff);
+	Write(addr+1, v>>8);
+}
+
+
 //=============================================================================
 //	eZ80::Read
 //-----------------------------------------------------------------------------
@@ -55,6 +64,26 @@ inline byte eZ80::Read(word addr) const
 {
 	return memory->Read(addr);
 }
+
+inline byte eZ80::ReadInc(int& addr) const
+{
+	return memory->Read(addr++);
+}
+
+inline int eZ80::Read2(word addr) const
+{
+	unsigned r = memory->Read(addr);
+	r += memory->Read(addr+1) << 8u;
+	return r;
+}
+
+inline int eZ80::Read2Inc(int& addr) const
+{
+	unsigned r = memory->Read(addr++);
+	r += memory->Read(addr++) << 8u;
+	return r;
+}
+
 
 //=============================================================================
 //	eZ80::InitOpNoPrefix
@@ -151,7 +180,7 @@ void eZ80::InitOpCB()
 //-----------------------------------------------------------------------------
 void eZ80::InitOpDD()
 {
-	CALLFUNC const opcodes[] = 
+	CALLFUNC const opcodes[] =
 	{
 		&eZ80::Op00 , &eZ80::Op01 , &eZ80::Op02 , &eZ80::Op03 , &eZ80::Op04 , &eZ80::Op05 , &eZ80::Op06 , &eZ80::Op07 ,
 		&eZ80::Op08 , &eZ80::Opx09, &eZ80::Op0A , &eZ80::Op0B , &eZ80::Op0C , &eZ80::Op0D , &eZ80::Op0E , &eZ80::Op0F ,
@@ -196,7 +225,7 @@ void eZ80::InitOpDD()
 //-----------------------------------------------------------------------------
 void eZ80::InitOpED()
 {
-	CALLFUNC const opcodes[] = 
+	CALLFUNC const opcodes[] =
 	{
 		&eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 ,
 		&eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 , &eZ80::Op00 ,
