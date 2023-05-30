@@ -92,6 +92,10 @@ These are the same as regular unrealspeccyp. Good luck typing!
 * Shift keys on your keyboard are "Caps Shift".
 * Alt or Ctrl keys on your keyboard are "Symbol Shift".
 
+#### Menu
+
+Use ESC to show or hide the menu. In the menu, use the arrow keys, Enter and ESC
+
 # Building
 
 You should use the latest `develop` branch of 
